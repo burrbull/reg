@@ -41,11 +41,8 @@ impl<REG: Readable> Reg<REG> {
     /// let flag = reader.field2().bit_is_set();
     /// ```
     #[inline(always)]
-    pub unsafe fn read(&self) -> R<REG> {
-        R {
-            bits: self.as_ptr().read_volatile(),
-            _reg: marker::PhantomData,
-        }
+    pub unsafe fn read(&self) -> REG::Reader {
+        REG::Reader::from_bits(self.as_ptr().read_volatile())
     }
 }
 
@@ -84,14 +81,13 @@ impl<REG: Resettable + Writable> Reg<REG> {
     #[inline(always)]
     pub unsafe fn write<F>(&self, f: F) -> REG::Ux
     where
-        F: FnOnce(&mut W<REG>) -> &mut W<REG>,
+        F: FnOnce(&mut REG::Writer) -> &mut REG::Writer,
     {
-        let value = f(&mut W {
-            bits: REG::RESET_VALUE & !REG::ONE_TO_MODIFY_FIELDS_BITMAP
+        let value = f(&mut REG::Writer::from_bits(
+            REG::RESET_VALUE & !REG::ONE_TO_MODIFY_FIELDS_BITMAP
                 | REG::ZERO_TO_MODIFY_FIELDS_BITMAP,
-            _reg: marker::PhantomData,
-        })
-        .bits;
+        ))
+        .to_bits();
         self.as_ptr().write_volatile(value);
         value
     }
@@ -127,16 +123,15 @@ impl<REG: Resettable + Writable> Reg<REG> {
     #[inline(always)]
     pub unsafe fn from_write<F, T>(&self, f: F) -> T
     where
-        F: FnOnce(&mut W<REG>) -> T,
+        F: FnOnce(&mut REG::Writer) -> T,
     {
-        let mut writer = W {
-            bits: REG::RESET_VALUE & !REG::ONE_TO_MODIFY_FIELDS_BITMAP
+        let mut writer = REG::Writer::from_bits(
+            REG::RESET_VALUE & !REG::ONE_TO_MODIFY_FIELDS_BITMAP
                 | REG::ZERO_TO_MODIFY_FIELDS_BITMAP,
-            _reg: marker::PhantomData,
-        };
+        );
         let result = f(&mut writer);
 
-        self.as_ptr().write_volatile(writer.bits);
+        self.as_ptr().write_volatile(writer.to_bits());
 
         result
     }
@@ -153,13 +148,9 @@ impl<REG: Writable> Reg<REG> {
     #[inline(always)]
     pub unsafe fn write_with_zero<F>(&self, f: F) -> REG::Ux
     where
-        F: FnOnce(&mut W<REG>) -> &mut W<REG>,
+        F: FnOnce(&mut REG::Writer) -> &mut REG::Writer,
     {
-        let value = f(&mut W {
-            bits: REG::Ux::ZERO,
-            _reg: marker::PhantomData,
-        })
-        .bits;
+        let value = f(&mut REG::Writer::from_bits(REG::Ux::ZERO)).to_bits();
         self.as_ptr().write_volatile(value);
         value
     }
@@ -174,16 +165,13 @@ impl<REG: Writable> Reg<REG> {
     #[inline(always)]
     pub unsafe fn from_write_with_zero<F, T>(&self, f: F) -> T
     where
-        F: FnOnce(&mut W<REG>) -> T,
+        F: FnOnce(&mut REG::Writer) -> T,
     {
-        let mut writer = W {
-            bits: REG::Ux::ZERO,
-            _reg: marker::PhantomData,
-        };
+        let mut writer = REG::Writer::from_bits(REG::Ux::ZERO);
 
         let result = f(&mut writer);
 
-        self.as_ptr().write_volatile(writer.bits);
+        self.as_ptr().write_volatile(writer.to_bits());
 
         result
     }
@@ -218,20 +206,16 @@ impl<REG: Readable + Writable> Reg<REG> {
     #[inline(always)]
     pub unsafe fn modify<F>(&self, f: F) -> REG::Ux
     where
-        for<'w> F: FnOnce(&R<REG>, &'w mut W<REG>) -> &'w mut W<REG>,
+        for<'w> F: FnOnce(&REG::Reader, &'w mut REG::Writer) -> &'w mut REG::Writer,
     {
         let bits = self.as_ptr().read_volatile();
         let value = f(
-            &R {
-                bits,
-                _reg: marker::PhantomData,
-            },
-            &mut W {
-                bits: bits & !REG::ONE_TO_MODIFY_FIELDS_BITMAP | REG::ZERO_TO_MODIFY_FIELDS_BITMAP,
-                _reg: marker::PhantomData,
-            },
+            &REG::Reader::from_bits(bits),
+            &mut REG::Writer::from_bits(
+                bits & !REG::ONE_TO_MODIFY_FIELDS_BITMAP | REG::ZERO_TO_MODIFY_FIELDS_BITMAP,
+            ),
         )
-        .bits;
+        .to_bits();
         self.as_ptr().write_volatile(value);
         value
     }
@@ -270,24 +254,17 @@ impl<REG: Readable + Writable> Reg<REG> {
     #[inline(always)]
     pub unsafe fn from_modify<F, T>(&self, f: F) -> T
     where
-        for<'w> F: FnOnce(&R<REG>, &'w mut W<REG>) -> T,
+        for<'w> F: FnOnce(&REG::Reader, &'w mut REG::Writer) -> T,
     {
         let bits = self.as_ptr().read_volatile();
 
-        let mut writer = W {
-            bits: bits & !REG::ONE_TO_MODIFY_FIELDS_BITMAP | REG::ZERO_TO_MODIFY_FIELDS_BITMAP,
-            _reg: marker::PhantomData,
-        };
-
-        let result = f(
-            &R {
-                bits,
-                _reg: marker::PhantomData,
-            },
-            &mut writer,
+        let mut writer = REG::Writer::from_bits(
+            bits & !REG::ONE_TO_MODIFY_FIELDS_BITMAP | REG::ZERO_TO_MODIFY_FIELDS_BITMAP,
         );
 
-        self.as_ptr().write_volatile(writer.bits);
+        let result = f(&REG::Reader::from_bits(bits), &mut writer);
+
+        self.as_ptr().write_volatile(writer.to_bits());
 
         result
     }
@@ -295,7 +272,7 @@ impl<REG: Readable + Writable> Reg<REG> {
 
 impl<REG: Readable> core::fmt::Debug for Reg<REG>
 where
-    R<REG>: core::fmt::Debug,
+    REG::Reader: core::fmt::Debug,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         unsafe { core::fmt::Debug::fmt(&self.read(), f) }
