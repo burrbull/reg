@@ -127,3 +127,9 @@ pub trait Resettable: RegisterSpec {
 pub struct Safe;
 /// You should check that value is allowed to pass to register/field writer marked with this
 pub struct Unsafe;
+/// Marker for field writers are safe to write in specified inclusive range
+pub struct Range<const MIN: u64, const MAX: u64>;
+/// Marker for field writers are safe to write in specified inclusive range
+pub struct RangeFrom<const MIN: u64>;
+/// Marker for field writers are safe to write in specified inclusive range
+pub struct RangeTo<const MAX: u64>;
