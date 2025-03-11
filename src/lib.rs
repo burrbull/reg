@@ -13,8 +13,6 @@ mod r_raw;
 pub use r_raw::*;
 #[cfg(feature = "atomics")]
 mod atomic;
-#[cfg(feature = "atomics")]
-use atomic::*;
 
 use core::marker;
 use num_traits::{ConstOne, ConstZero};
@@ -82,7 +80,6 @@ pub trait FromBits<U> {
 pub trait ToBits<U> {
     fn to_bits(&self) -> U;
 }
-
 
 /// Trait implemented by readable registers to enable the `read` method.
 ///
